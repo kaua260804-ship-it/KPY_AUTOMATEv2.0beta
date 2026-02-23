@@ -1,0 +1,39 @@
+# requirements.txt
+pandas>=2.0.0
+openpyxl>=3.1.0
+xlrd>=2.0.1
+Pillow>=10.0.0
+pyinstaller>=6.0.0
+by:Kaua Felipe
+
+# K'PY AUTOMATE - BY.KAUA
+
+Sistema de automação para tratamento de relatórios de vendas.
+
+## Funcionalidades
+
+- Processamento automático de relatórios Curva ABC por Loja
+- Filtros inteligentes por grupos de lojas (EMPÓRIO, MERCEARIA, OUTROS)
+- Preview dos dados processados
+- Exportação para Excel
+- Tema claro/escuro
+- Atalhos de teclado
+
+## Como usar
+
+1. Execute o programa
+2. Clique em "Procurar" ou use Ctrl+O para selecionar o arquivo Excel
+3. Clique em "Processar"
+4. Use os filtros para selecionar lojas específicas
+5. Exporte para Excel quando finalizar
+
+## Atalhos
+
+- Ctrl+O: Abrir arquivo
+- F1: Ajuda
+
+## Instalação para desenvolvimento
+
+```bash
+pip install -r requirements.txt
+python main.py
