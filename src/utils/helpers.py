@@ -1,10 +1,12 @@
 # src/utils/helpers.py
 """
 Funções auxiliares para formatação e utilitários.
+Versão 2.1.0 - Com centralização melhorada
 """
 import pandas as pd
 import os
 import sys
+import tkinter as tk
 
 def formatar_br(valor, tipo='moeda'):
     """
@@ -51,15 +53,15 @@ def get_resource_path(relative_path):
     try:
         # PyInstaller cria uma pasta temporária e armazena o caminho em _MEIPASS
         base_path = sys._MEIPASS
-        print(f"📦 Rodando como executável, _MEIPASS: {base_path}")
+        # print(f"📦 Rodando como executável, _MEIPASS: {base_path}")
     except Exception:
         # Rodando como script normal
         base_path = os.path.abspath(".")
-        print(f"📁 Rodando como script, base_path: {base_path}")
+        # print(f"📁 Rodando como script, base_path: {base_path}")
     
     full_path = os.path.join(base_path, relative_path)
-    print(f"🔍 Caminho completo: {full_path}")
-    print(f"✅ Existe: {os.path.exists(full_path)}")
+    # print(f"🔍 Caminho completo: {full_path}")
+    # print(f"✅ Existe: {os.path.exists(full_path)}")
     
     return full_path
 
@@ -90,14 +92,64 @@ def resource_path(relative_path):
 
 def centralizar_janela(janela, largura, altura):
     """
-    Centraliza uma janela na tela.
+    Centraliza uma janela na tela de forma perfeita.
     
     Args:
         janela: Objeto Tk/Toplevel
         largura: Largura desejada
         altura: Altura desejada
     """
+    # Forçar atualização da janela para pegar dimensões reais
     janela.update_idletasks()
-    x = (janela.winfo_screenwidth() // 2) - (largura // 2)
-    y = (janela.winfo_screenheight() // 2) - (altura // 2)
+    
+    # Pegar dimensões da tela
+    largura_tela = janela.winfo_screenwidth()
+    altura_tela = janela.winfo_screenheight()
+    
+    # Calcular posição para centralizar
+    x = (largura_tela // 2) - (largura // 2)
+    y = (altura_tela // 2) - (altura // 2)
+    
+    # Garantir que a janela não fique fora da tela
+    x = max(0, min(x, largura_tela - largura))
+    y = max(0, min(y, altura_tela - altura))
+    
+    # Aplicar a geometria
     janela.geometry(f'{largura}x{altura}+{x}+{y}')
+    
+    # Configurar tamanho mínimo para evitar que fique muito pequena
+    janela.minsize(800, 600)
+    
+    # Forçar atualização novamente
+    janela.update_idletasks()
+
+def centralizar_filho(parent, filho, largura, altura):
+    """
+    Centraliza uma janela filha em relação à janela pai.
+    
+    Args:
+        parent: Janela pai
+        filho: Janela filha (Toplevel)
+        largura: Largura da janela filha
+        altura: Altura da janela filha
+    """
+    filho.update_idletasks()
+    
+    # Posição da janela pai
+    x_pai = parent.winfo_x()
+    y_pai = parent.winfo_y()
+    largura_pai = parent.winfo_width()
+    altura_pai = parent.winfo_height()
+    
+    # Calcular posição para centralizar em relação ao pai
+    x = x_pai + (largura_pai // 2) - (largura // 2)
+    y = y_pai + (altura_pai // 2) - (altura // 2)
+    
+    # Garantir que não saia da tela
+    largura_tela = parent.winfo_screenwidth()
+    altura_tela = parent.winfo_screenheight()
+    
+    x = max(0, min(x, largura_tela - largura))
+    y = max(0, min(y, altura_tela - altura))
+    
+    filho.geometry(f'{largura}x{altura}+{x}+{y}')

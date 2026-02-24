@@ -1,6 +1,7 @@
 # src/ui/telas/tela_entradas.py
 """
 Tela específica para processar Entradas por Grupo.
+Versão 2.1.0 - Com barra de progresso
 """
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -13,6 +14,8 @@ from src.utils.tooltip import criar_tooltip
 from src.ui.widgets import BlocoResumo, BlocoPreview
 from src.utils.config import LAYOUT
 from src.models.modelo_entradas import ModeloEntradas
+from src.utils.logger import info, error, warning, debug
+from src.ui.progress_bar import ProgressBar, executar_com_progresso
 
 class TelaEntradas:
     """Tela específica para Entradas por Grupo"""
@@ -241,38 +244,70 @@ class TelaEntradas:
             self.status_label.configure(text="📁 Arquivo selecionado", text_color="#00ff00")
     
     def _process_file(self):
-        """Processa o arquivo"""
+        """Processa o arquivo com barra de progresso"""
         path = self.entry_path.get().strip()
         if not path:
             messagebox.showerror("Erro", "Selecione um arquivo!")
             return
         
+        executar_com_progresso(
+            self.frame,
+            self._process_file_thread,
+            "📦 Processando Entradas",
+            "Lendo e processando arquivo...",
+            path
+        )
+    
+    def _process_file_thread(self, progress, path):
+        """Versão em thread do processamento"""
         try:
-            self.status_label.configure(text="⏳ Processando...", text_color="#ffff00")
-            self.parent.update()
+            progress.atualizar(10, "Verificando arquivo...")
+            
+            if not os.path.exists(path):
+                self.frame.after(0, lambda: messagebox.showerror("Erro", f"Arquivo não encontrado:\n{path}"))
+                return
+            
+            progress.atualizar(20, "Lendo arquivo Excel...")
             
             inicio = time.time()
             
+            # Ler o arquivo
             df = pd.read_excel(path)
+            progress.atualizar(40, f"Arquivo lido: {len(df)} linhas")
+            
+            # Processar com o modelo
+            progress.atualizar(60, "Processando dados...")
             df_limpo = self.modelo.processar(df)
             
             fim = time.time()
             self.tempo_processamento = fim - inicio
             
+            progress.atualizar(80, "Atualizando dados...")
+            
             self.df_processed = df_limpo
             self.file_path = path
             
-            # Atualiza resumo e preview
-            self._atualizar_resumo_preview()
+            progress.atualizar(90, "Atualizando interface...")
             
-            self.btn_export.configure(state="normal")
-            self.status_label.configure(text="✅ Processamento concluído!", text_color="#00ff00")
+            # Atualizar interface na thread principal
+            self.frame.after(0, lambda: self._atualizar_interface_apos_processar())
             
-            messagebox.showinfo("Sucesso", f"✅ Processado em {self.tempo_processamento:.2f} segundos!")
+            progress.atualizar(100, "Concluído!")
             
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro: {e}")
-            self.status_label.configure(text="❌ Erro", text_color="#ff0000")
+            error(f"❌ Erro no processamento: {e}")
+            self.frame.after(0, lambda: messagebox.showerror("Erro", f"Erro ao processar:\n{str(e)}"))
+            self.frame.after(0, lambda: self.status_label.configure(text="❌ Erro", text_color="#ff0000"))
+            raise
+    
+    def _atualizar_interface_apos_processar(self):
+        """Atualiza a interface após o processamento"""
+        self._atualizar_resumo_preview()
+        self.btn_export.configure(state="normal")
+        self.status_label.configure(text="✅ Processamento concluído!", text_color="#00ff00")
+        
+        messagebox.showinfo("Sucesso", f"✅ Processado em {self.tempo_processamento:.2f} segundos!\n"
+                                      f"📊 Total de linhas: {len(self.df_processed)}")
     
     def _atualizar_resumo_preview(self):
         """Atualiza o resumo e preview com os dados processados"""
@@ -316,8 +351,11 @@ class TelaEntradas:
             initialfile=nome
         )
         if path:
-            self.df_processed.to_excel(path, index=False)
-            messagebox.showinfo("Sucesso", f"✅ Arquivo salvo em:\n{path}")
+            try:
+                self.df_processed.to_excel(path, index=False)
+                messagebox.showinfo("Sucesso", f"✅ Arquivo salvo em:\n{path}")
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao salvar:\n{e}")
     
     def atualizar_cores(self, cores):
         """Atualiza as cores quando o tema muda"""

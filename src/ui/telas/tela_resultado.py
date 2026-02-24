@@ -1,6 +1,7 @@
 # src/ui/telas/tela_resultado.py
 """
 Tela de resultado para Curva ABC com CustomTkinter - ESTILO DEBUG
+Versão 2.1.0 - Com barra de progresso
 """
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
@@ -11,6 +12,8 @@ import pandas as pd
 from src.utils.tooltip import criar_tooltip
 from src.ui.widgets import BlocoResumo, BlocoPreview
 from src.utils.config import LAYOUT
+from src.utils.logger import info, error, warning, debug
+from src.ui.progress_bar import ProgressBar, executar_com_progresso
 
 class TelaResultado:
     """Tela com resumo, preview e botões - Estilo Debug"""
@@ -278,7 +281,7 @@ class TelaResultado:
             self.status_label.configure(text="📁 Arquivo selecionado", text_color="#00ff00")
     
     def _process_file(self):
-        """Processa o arquivo selecionado com identificação automática"""
+        """Processa o arquivo selecionado com barra de progresso"""
         path = self.entry_path.get().strip()
         if not path:
             messagebox.showerror("Erro", "Selecione um arquivo!")
@@ -288,59 +291,81 @@ class TelaResultado:
             messagebox.showerror("Erro", f"Arquivo não encontrado:\n{path}")
             return
         
+        executar_com_progresso(
+            self.parent,
+            self._process_file_thread,
+            "📊 Processando Arquivo",
+            "Identificando e processando dados...",
+            path
+        )
+    
+    def _process_file_thread(self, progress, path):
+        """Versão em thread do processamento"""
         try:
-            self.status_label.configure(text="⏳ Identificando modelo...", text_color="#ffff00")
-            self.parent.update()
-            
-            inicio = time.time()
+            progress.atualizar(10, "Identificando modelo...")
             
             # Identificar o modelo automaticamente
             modelo, df = self.identificador.identificar(path)
             
             if modelo is None:
-                messagebox.showerror(
+                self.frame.after(0, lambda: messagebox.showerror(
                     "Erro",
                     "❌ Não foi possível identificar o modelo da planilha.\n\n"
                     "Verifique se o arquivo está no formato correto."
-                )
-                self.status_label.configure(text="❌ Modelo não identificado", text_color="#ff0000")
+                ))
+                self.frame.after(0, lambda: self.status_label.configure(
+                    text="❌ Modelo não identificado", text_color="#ff0000"
+                ))
                 return
             
-            self.status_label.configure(text=f"✅ Modelo identificado: {modelo.nome}", text_color="#00ff00")
-            self.parent.update()
+            progress.atualizar(30, f"Modelo identificado: {modelo.nome}")
             
             # Processar com o modelo identificado
+            progress.atualizar(50, "Processando dados...")
+            inicio = time.time()
             df_limpo = modelo.processar(df)
-            
             fim = time.time()
+            
             self.tempo_processamento = fim - inicio
+            
+            progress.atualizar(80, "Calculando estatísticas...")
             
             self.df_processed = df_limpo
             self.df_filtrado = None
             self.modelo_atual = modelo
             self.file_path = path
             
-            # Atualizar resumo e preview
-            self._atualizar_resumo_preview(df_limpo)
+            progress.atualizar(90, "Atualizando interface...")
             
-            # Habilita botões
-            self.btn_filtro.configure(state="normal")
-            self.btn_export.configure(state="normal")
-            self.status_label.configure(text="✅ Processamento concluído!", text_color="#00ff00")
+            # Atualizar interface na thread principal
+            self.frame.after(0, lambda: self._atualizar_interface_apos_processar())
             
-            messagebox.showinfo(
-                "Sucesso",
-                f"✅ Planilha processada em {self.tempo_processamento:.2f} segundos!\n"
-                f"📊 Modelo: {modelo.nome}"
-            )
+            progress.atualizar(100, "Concluído!")
             
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao processar:\n{str(e)}")
-            self.resumo.limpar()
-            self.preview.limpar()
-            self.btn_export.configure(state="disabled")
-            self.btn_filtro.configure(state="disabled")
-            self.status_label.configure(text="❌ Erro no processamento", text_color="#ff0000")
+            error(f"❌ Erro ao processar: {e}")
+            self.frame.after(0, lambda: messagebox.showerror("Erro", f"Erro ao processar:\n{str(e)}"))
+            self.frame.after(0, lambda: self.resumo.limpar())
+            self.frame.after(0, lambda: self.preview.limpar())
+            self.frame.after(0, lambda: self.btn_export.configure(state="disabled"))
+            self.frame.after(0, lambda: self.btn_filtro.configure(state="disabled"))
+            self.frame.after(0, lambda: self.status_label.configure(
+                text="❌ Erro no processamento", text_color="#ff0000"
+            ))
+            raise
+    
+    def _atualizar_interface_apos_processar(self):
+        """Atualiza a interface após o processamento"""
+        self._atualizar_resumo_preview(self.df_processed)
+        self.btn_filtro.configure(state="normal")
+        self.btn_export.configure(state="normal")
+        self.status_label.configure(text="✅ Processamento concluído!", text_color="#00ff00")
+        
+        messagebox.showinfo(
+            "Sucesso",
+            f"✅ Planilha processada em {self.tempo_processamento:.2f} segundos!\n"
+            f"📊 Modelo: {self.modelo_atual.nome}"
+        )
     
     def _atualizar_resumo_preview(self, df_mostrar):
         """Atualiza o resumo e preview com os dados fornecidos"""

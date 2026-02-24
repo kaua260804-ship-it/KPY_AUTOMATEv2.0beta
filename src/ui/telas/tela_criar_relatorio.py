@@ -1,6 +1,7 @@
 # src/ui/telas/tela_criar_relatorio.py
 """
 Tela para criar relatórios personalizados a partir de múltiplos arquivos.
+Versão 2.2.0 - Sem drag and drop
 """
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
@@ -13,6 +14,9 @@ from src.ui.widgets import BlocoResumo, BlocoPreview
 from src.core.identificador import IdentificadorModelos
 from src.relatorios.relatorios_disponiveis import GerenciadorRelatorios
 from src.utils.helpers import resource_path
+from src.utils.logger import info, error, warning, debug
+from src.ui.progress_bar import ProgressBar, executar_com_progresso
+from src.utils.config_manager import config
 
 class TelaCriarRelatorio:
     """Tela para criar relatórios personalizados"""
@@ -22,11 +26,14 @@ class TelaCriarRelatorio:
         self.cores = cores
         self.identificador = IdentificadorModelos()
         
-        print("\n" + "="*60)
-        print("🔍 MODELOS DISPONÍVEIS NA TELA:")
+        # Configurações
+        self.fonte_atual = config.get('tamanho_fonte', 12)
+        
+        info("\n" + "="*60)
+        info("🔍 MODELOS DISPONÍVEIS NA TELA:")
         for m in self.identificador.modelos:
-            print(f"  - {m.nome}")
-        print("="*60 + "\n")
+            info(f"  - {m.nome}")
+        info("="*60 + "\n")
         
         self.gerenciador_relatorios = GerenciadorRelatorios()
         
@@ -65,6 +72,7 @@ class TelaCriarRelatorio:
         self.status_label = None
         self.relatorio_label = None
         self.status_arquivos = []
+        self.container = None
         
     def mostrar(self):
         """Exibe a tela de criar relatório"""
@@ -83,23 +91,24 @@ class TelaCriarRelatorio:
     
     def _criar_interface(self):
         """Cria a interface completa"""
-        container = ctk.CTkFrame(self.frame, fg_color="transparent")
-        container.pack(fill='both', expand=True, padx=20, pady=10)
+        self.container = ctk.CTkFrame(self.frame, fg_color="transparent")
+        self.container.pack(fill='both', expand=True, padx=20, pady=10)
         
         # ===== TÍTULO =====
-        titulo_frame = ctk.CTkFrame(container, fg_color="transparent", height=50)
+        titulo_frame = ctk.CTkFrame(self.container, fg_color="transparent", height=50)
         titulo_frame.pack(fill='x', pady=(0, 10))
         titulo_frame.pack_propagate(False)
         
-        ctk.CTkLabel(
+        self.titulo_label = ctk.CTkLabel(
             titulo_frame,
             text="📋 CRIAR RELATÓRIO PERSONALIZADO",
             font=("Arial", 20, "bold"),
             text_color=self.cores['texto']
-        ).pack(anchor='w')
+        )
+        self.titulo_label.pack(anchor='w')
         
         # ===== ÁREA DE ARQUIVOS =====
-        arquivos_frame = ctk.CTkFrame(container, fg_color="transparent")
+        arquivos_frame = ctk.CTkFrame(self.container, fg_color="transparent")
         arquivos_frame.pack(fill='x', pady=5)
         
         # Cabeçalho
@@ -229,7 +238,7 @@ class TelaCriarRelatorio:
         
         # ===== STATUS =====
         self.status_label = ctk.CTkLabel(
-            container,
+            self.container,
             text="⏳ Aguardando arquivos...",
             font=("Arial", 11),
             text_color=self.cores['texto_secundario']
@@ -237,7 +246,7 @@ class TelaCriarRelatorio:
         self.status_label.pack(pady=5)
         
         self.relatorio_label = ctk.CTkLabel(
-            container,
+            self.container,
             text="Nenhum relatório selecionado",
             font=("Arial", 11, "italic"),
             text_color=self.cores['texto_secundario']
@@ -245,14 +254,36 @@ class TelaCriarRelatorio:
         self.relatorio_label.pack(pady=2)
         
         # ===== CONTEÚDO (RESUMO + PREVIEW) =====
-        content_frame = ctk.CTkFrame(container, fg_color="transparent")
-        content_frame.pack(fill='both', expand=True, pady=10)
+        self.content_frame = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.content_frame.pack(fill='both', expand=True, pady=10)
         
-        self.resumo = BlocoResumo(content_frame, self.cores)
+        self.resumo = BlocoResumo(self.content_frame, self.cores)
         self.resumo.pack(fill='x', pady=(0, 10))
         
-        self.preview = BlocoPreview(content_frame, self.cores)
+        self.preview = BlocoPreview(self.content_frame, self.cores)
         self.preview.pack(fill='both', expand=True)
+    
+    def atualizar_fonte(self, tamanho):
+        """Atualiza o tamanho da fonte em todos os elementos"""
+        self.fonte_atual = tamanho
+        
+        # Atualizar título
+        if hasattr(self, 'titulo_label'):
+            self.titulo_label.configure(font=("Arial", min(20, tamanho + 8), "bold"))
+        
+        # Atualizar entries
+        for entry in self.entries:
+            entry.configure(font=("Arial", tamanho - 1))
+        
+        # Atualizar status labels
+        self.status_label.configure(font=("Arial", tamanho - 1))
+        self.relatorio_label.configure(font=("Arial", tamanho - 1, "italic"))
+        
+        # Atualizar widgets compostos
+        if hasattr(self, 'resumo'):
+            self.resumo.atualizar_fonte(tamanho)
+        if hasattr(self, 'preview'):
+            self.preview.atualizar_fonte(tamanho)
     
     def _executar_comando(self, attr_name):
         """Executa o comando baseado no nome do atributo"""
@@ -290,7 +321,7 @@ class TelaCriarRelatorio:
     def _identificar_arquivo(self, indice):
         """Identifica automaticamente o tipo do arquivo"""
         try:
-            print(f"\n🔍 IDENTIFICANDO ARQUIVO {indice+1}: {self.arquivos[indice]}")
+            info(f"\n🔍 IDENTIFICANDO ARQUIVO {indice+1}: {self.arquivos[indice]}")
             
             modelo, df = self.identificador.identificar(self.arquivos[indice])
             
@@ -299,18 +330,18 @@ class TelaCriarRelatorio:
                 self.status_arquivos[indice].configure(
                     text=f"🔍 {modelo.nome}", text_color="yellow"
                 )
-                print(f"✅ Status atualizado para: {modelo.nome}")
+                info(f"✅ Status atualizado para: {modelo.nome}")
             else:
                 self.tipos_identificados[indice] = "Não identificado"
                 self.status_arquivos[indice].configure(
                     text="❓ Não identificado", text_color="orange"
                 )
-                print("❌ Não identificado")
+                warning("❌ Não identificado")
                 
         except Exception as e:
             self.tipos_identificados[indice] = "Erro"
             self.status_arquivos[indice].configure(text="❌ Erro", text_color="red")
-            print(f"❌ ERRO: {e}")
+            error(f"❌ ERRO: {e}")
     
     def _toggle_definir_arquivo(self, indice):
         """Alterna entre definir e redefinir o arquivo"""
@@ -321,6 +352,11 @@ class TelaCriarRelatorio:
             tipo = self.tipos_identificados[indice] if self.tipos_identificados[indice] is not None else "Definido"
             self.status_arquivos[indice].configure(text=f"✅ {tipo}", text_color="green")
             self.botoes_definir[indice].configure(text="🔄 Redefinir", fg_color="#ffa500")
+            
+            # Adicionar aos recentes
+            if self.arquivos[indice]:
+                from src.utils.config_manager import config
+                config.adicionar_arquivo_recente(self.arquivos[indice])
         else:
             self.arquivos_definidos[indice] = False
             self.entries[indice].configure(border_color=self.cores['destaque'])
@@ -343,7 +379,7 @@ class TelaCriarRelatorio:
         self.btn_carregar.configure(state="disabled")
     
     def _carregar_arquivos(self):
-        """Carrega todos os arquivos definidos"""
+        """Carrega todos os arquivos definidos com barra de progresso"""
         arquivos_validos = []
         for i in range(4):
             if self.arquivos_definidos[i] and self.arquivos[i] is not None:
@@ -353,23 +389,34 @@ class TelaCriarRelatorio:
             messagebox.showwarning("Aviso", "Nenhum arquivo definido!")
             return
         
-        self.status_label.configure(text="⏳ Carregando arquivos...", text_color="#ffff00")
-        self.parent.update()
-        
+        # Usar a função auxiliar com barra de progresso
+        executar_com_progresso(
+            self.frame,
+            self._carregar_arquivos_thread,
+            "📂 Carregando Arquivos",
+            "Preparando para carregar os arquivos...",
+            arquivos_validos
+        )
+    
+    def _carregar_arquivos_thread(self, progress, arquivos_validos):
+        """Versão em thread do carregamento de arquivos"""
         try:
+            progress.atualizar(10, "Lendo arquivos...")
+            
             mensagens = []
+            total_arquivos = len(arquivos_validos)
             
             # Resetar DataFrames
             self.df_curva = None
             self.df_estoque = None
             self.df_filtrado = None
             self.relatorio_selecionado = None
-            self.relatorio_label.configure(text="Nenhum relatório selecionado")
-            self.btn_processar.configure(state="disabled", fg_color=self.cores['botao_limpar'])
-            self.btn_filtrar.configure(state="disabled")
             
-            for i in arquivos_validos:
-                print(f"\n📄 Carregando arquivo {i+1}: {self.arquivos[i]}")
+            for idx, i in enumerate(arquivos_validos):
+                progresso_parcial = 10 + (idx * 80 // total_arquivos)
+                progress.atualizar(progresso_parcial, f"Processando arquivo {i+1} de {total_arquivos}...")
+                
+                info(f"\n📄 Carregando arquivo {i+1}: {self.arquivos[i]}")
                 
                 modelo, df = self.identificador.identificar(self.arquivos[i])
                 
@@ -377,7 +424,7 @@ class TelaCriarRelatorio:
                     mensagens.append(f"❌ Arquivo {i+1}: Tipo não identificado")
                     continue
                 
-                print(f"   Modelo: {modelo.nome}")
+                info(f"   Modelo: {modelo.nome}")
                 
                 # Processar o DataFrame com o modelo
                 df_limpo = modelo.processar(df)
@@ -389,49 +436,58 @@ class TelaCriarRelatorio:
                 # Separar por tipo
                 if "Curva ABC" in modelo.nome:
                     self.df_curva = df_limpo
-                    print("   ✅ Curva ABC armazenada")
+                    info("   ✅ Curva ABC armazenada")
                 elif "Estoque" in modelo.nome:
                     self.df_estoque = df_limpo
-                    print("   ✅ Estoque armazenado")
+                    info("   ✅ Estoque armazenado")
                 
                 mensagens.append(f"✅ Arquivo {i+1}: {modelo.nome} - {len(df_limpo)} linhas")
+            
+            progress.atualizar(90, "Carregando média de vendas...")
             
             # Carregar média de vendas
             caminho_media = resource_path("data/media_vendas.xlsx")
             if os.path.exists(caminho_media):
                 self.df_media = pd.read_excel(caminho_media)
-                print(f"📈 Média de vendas carregada: {len(self.df_media)} linhas")
+                info(f"📈 Média de vendas carregada: {len(self.df_media)} linhas")
             else:
                 self.df_media = None
-                print("⚠️ Arquivo de média de vendas não encontrado")
+                warning("⚠️ Arquivo de média de vendas não encontrado")
             
-            # Atualizar interface
-            resumo_text = "\n".join(mensagens)
-            resumo_text += f"\n\n📊 Dados carregados:"
-            if self.df_curva is not None:
-                resumo_text += f"\n   • Curva ABC: {len(self.df_curva)} linhas"
-            if self.df_estoque is not None:
-                resumo_text += f"\n   • Estoque: {len(self.df_estoque)} linhas"
-            if self.df_media is not None:
-                resumo_text += f"\n   • Média de vendas: {len(self.df_media)} linhas"
+            progress.atualizar(95, "Atualizando interface...")
             
-            self.resumo.atualizar_conteudo(resumo_text)
+            # Atualizar interface (isso precisa ser feito na thread principal)
+            self.frame.after(0, lambda: self._atualizar_interface_apos_carregar(mensagens))
             
-            # Preview dos dados básicos
-            preview_text = self._gerar_preview_dados()
-            self.preview.atualizar_conteudo(preview_text)
-            
-            # Habilitar botão de relatório
-            self.btn_relatorio.configure(state="normal")
-            self.status_label.configure(text="✅ Dados carregados! Escolha um relatório.", text_color="#00ff00")
-            
-            messagebox.showinfo("Sucesso", f"{len(arquivos_validos)} arquivo(s) carregado(s)!")
+            progress.atualizar(100, "Concluído!")
             
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao carregar: {e}")
-            self.status_label.configure(text="❌ Erro no carregamento", text_color="#ff0000")
-            import traceback
-            traceback.print_exc()
+            error(f"❌ Erro no carregamento: {e}")
+            self.frame.after(0, lambda: messagebox.showerror("Erro", f"Erro ao carregar: {e}"))
+            raise
+    
+    def _atualizar_interface_apos_carregar(self, mensagens):
+        """Atualiza a interface após o carregamento (na thread principal)"""
+        resumo_text = "\n".join(mensagens)
+        resumo_text += f"\n\n📊 Dados carregados:"
+        if self.df_curva is not None:
+            resumo_text += f"\n   • Curva ABC: {len(self.df_curva)} linhas"
+        if self.df_estoque is not None:
+            resumo_text += f"\n   • Estoque: {len(self.df_estoque)} linhas"
+        if self.df_media is not None:
+            resumo_text += f"\n   • Média de vendas: {len(self.df_media)} linhas"
+        
+        self.resumo.atualizar_conteudo(resumo_text)
+        
+        # Preview dos dados básicos
+        preview_text = self._gerar_preview_dados()
+        self.preview.atualizar_conteudo(preview_text)
+        
+        # Habilitar botão de relatório
+        self.btn_relatorio.configure(state="normal")
+        self.status_label.configure(text="✅ Dados carregados! Escolha um relatório.", text_color="#00ff00")
+        
+        messagebox.showinfo("Sucesso", f"{len(mensagens)} arquivo(s) carregado(s)!")
     
     def _gerar_preview_dados(self):
         """Gera preview dos dados carregados"""
@@ -497,35 +553,58 @@ class TelaCriarRelatorio:
         self.status_label.configure(text=f"✅ Relatório '{relatorio.nome}' selecionado. Clique em Processar.", text_color="#00ff00")
     
     def _processar_relatorio(self):
-        """Processa o relatório selecionado"""
+        """Processa o relatório selecionado com barra de progresso"""
         if self.relatorio_selecionado is None:
             messagebox.showwarning("Aviso", "Selecione um relatório primeiro!")
             return
         
-        self.status_label.configure(text=f"⏳ Gerando {self.relatorio_selecionado.nome}...", text_color="#ffff00")
-        self.parent.update()
-        
+        executar_com_progresso(
+            self.frame,
+            self._processar_relatorio_thread,
+            f"📊 Gerando {self.relatorio_selecionado.nome}",
+            "Preparando dados..."
+        )
+    
+    def _processar_relatorio_thread(self, progress):
+        """Versão em thread do processamento de relatório"""
         try:
+            progress.atualizar(10, "Inicializando...")
+            
             self.df_filtrado = None
             
             if "Ruptura" in self.relatorio_selecionado.nome:
+                progress.atualizar(20, "Verificando dados necessários...")
+                
                 if self.df_curva is None or self.df_estoque is None:
-                    messagebox.showerror("Erro", "Precisa de Curva ABC e Estoque para gerar ruptura!")
+                    self.frame.after(0, lambda: messagebox.showerror(
+                        "Erro", "Precisa de Curva ABC e Estoque para gerar ruptura!"
+                    ))
                     return
                 
+                progress.atualizar(30, "Carregando modelo de ruptura...")
                 from src.models.modelo_ruptura import ModeloRuptura
                 modelo_ruptura = ModeloRuptura()
                 
+                progress.atualizar(40, "Processando dados de estoque e vendas...")
                 self.df_ruptura = modelo_ruptura.processar(
                     self.df_estoque,
                     self.df_curva,
                     self.df_media
                 )
                 
-                preview = modelo_ruptura.get_preview(self.df_ruptura, 20)
+                progress.atualizar(80, "Gerando preview...")
+                if self.df_ruptura is None:
+                    raise ValueError("Falha ao gerar relatório de ruptura - retornou None")
+                
+                if hasattr(modelo_ruptura, 'get_preview'):
+                    preview = modelo_ruptura.get_preview(self.df_ruptura, 20)
+                else:
+                    preview = self._gerar_preview_padrao(self.df_ruptura)
+                
                 self.df_combinado = self.df_ruptura
                 
             else:
+                progress.atualizar(30, "Combinando dados...")
                 dfs_temp = []
                 if self.df_curva is not None:
                     dfs_temp.append(self.df_curva)
@@ -537,18 +616,47 @@ class TelaCriarRelatorio:
                 else:
                     self.df_combinado = pd.DataFrame()
                 
+                progress.atualizar(70, "Gerando relatório...")
                 preview = self.relatorio_selecionado.gerar(self.df_combinado)
             
-            self.preview.atualizar_conteudo(preview)
-            self.btn_exportar.configure(state="normal")
-            self.btn_filtrar.configure(state="normal")
-            self.status_label.configure(text=f"✅ {self.relatorio_selecionado.nome} gerado! Use o filtro se desejar.", text_color="#00ff00")
+            progress.atualizar(90, "Atualizando interface...")
+            
+            # Atualizar interface na thread principal
+            self.frame.after(0, lambda: self._atualizar_interface_apos_processar(preview))
+            
+            progress.atualizar(100, "Concluído!")
             
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao gerar relatório: {e}")
-            self.status_label.configure(text="❌ Erro ao gerar relatório", text_color="#ff0000")
-            import traceback
-            traceback.print_exc()
+            error(f"❌ Erro ao gerar relatório: {e}")
+            self.frame.after(0, lambda: messagebox.showerror("Erro", f"Erro ao gerar relatório: {e}"))
+            self.frame.after(0, lambda: self.status_label.configure(text="❌ Erro ao gerar relatório", text_color="#ff0000"))
+            raise
+    
+    def _atualizar_interface_apos_processar(self, preview):
+        """Atualiza a interface após o processamento"""
+        self.preview.atualizar_conteudo(preview)
+        self.btn_exportar.configure(state="normal")
+        self.btn_filtrar.configure(state="normal")
+        self.status_label.configure(
+            text=f"✅ {self.relatorio_selecionado.nome} gerado! Use o filtro se desejar.",
+            text_color="#00ff00"
+        )
+    
+    def _gerar_preview_padrao(self, df):
+        """Gera preview padrão caso o modelo não tenha método próprio"""
+        if df is None or len(df) == 0:
+            return "Nenhum dado para preview"
+        
+        linhas = []
+        linhas.append("=" * 100)
+        linhas.append("📋 PRIMEIRAS 20 LINHAS")
+        linhas.append("=" * 100)
+        linhas.append("")
+        
+        preview_df = df.head(20).copy()
+        linhas.append(preview_df.to_string(index=False))
+        
+        return "\n".join(linhas)
     
     def _abrir_filtro(self):
         """Abre a janela de filtro para o relatório atual"""
