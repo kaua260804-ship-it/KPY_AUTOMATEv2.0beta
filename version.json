@@ -1,6 +1,6 @@
 {
-    "latest_version": "2.0.0",
-    "release_notes": "Versão inicial com relatório de ruptura",
-    "download_url": "https://github.com/kaua260804-ship-it/KPY_AUTOMATEv2.0beta/releases/download/v2.0.0/KPY_AUTOMATE_v2.0.0.exe",
+    "latest_version": "2.1.0",
+    "release_notes": "Temas personalizados, ajuste de fonte e configurações persistentes",
+    "download_url": "https://github.com/kaua260804-ship-it/KPY_AUTOMATEv2.0beta/releases/download/v2.1.0/KPY_AUTOMATE_v2.1.0.exe",
     "required": false
 }
