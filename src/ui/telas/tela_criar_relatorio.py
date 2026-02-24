@@ -1,7 +1,7 @@
 # src/ui/telas/tela_criar_relatorio.py
 """
 Tela para criar relatórios personalizados a partir de múltiplos arquivos.
-Versão 2.2.0 - Sem drag and drop
+Versão 2.2.0 - Com botão VARRER funcionando
 """
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
@@ -67,6 +67,7 @@ class TelaCriarRelatorio:
         self.btn_relatorio = None
         self.btn_processar = None
         self.btn_filtrar = None
+        self.btn_varrer = None
         self.resumo = None
         self.preview = None
         self.status_label = None
@@ -140,13 +141,14 @@ class TelaCriarRelatorio:
             width=500
         ).pack(side='left')
         
-        # Lista de botões de controle por linha
-        botoes_por_linha = [
+        # Lista de botões de controle (agora com 6 botões)
+        botoes_controle = [
             ("📂 CARREGAR", "btn_carregar", self.cores['destaque']),
             ("📊 RELATÓRIO", "btn_relatorio", "#4a6da8"),
             ("⚙️ PROCESSAR", "btn_processar", self.cores['destaque']),
             ("🔽 FILTRAR", "btn_filtrar", self.cores['botao_filtro']),
             ("💾 EXPORTAR", "btn_exportar", self.cores['botao_exportar']),
+            ("🧹 VARRER", "btn_varrer", "#4a6da8"),
             ("🗑️ LIMPAR", "btn_limpar", self.cores['botao_limpar'])
         ]
         
@@ -201,40 +203,21 @@ class TelaCriarRelatorio:
             # Separador
             ctk.CTkLabel(frame_botoes, text="|", text_color=self.cores['texto_secundario']).pack(side='left', padx=5)
             
-            # Adicionar botões de controle nas primeiras 3 linhas (2 botões por linha)
-            if i < 3:
-                btn1_text, btn1_attr, btn1_cor = botoes_por_linha[i*2]
-                btn2_text, btn2_attr, btn2_cor = botoes_por_linha[i*2 + 1]
-                
-                # Primeiro botão da linha
-                btn1 = ctk.CTkButton(
-                    frame_botoes, text=btn1_text, 
-                    command=lambda attr=btn1_attr: self._executar_comando(attr),
-                    fg_color=btn1_cor,
-                    hover_color="#a52a2a" if "CARREGAR" in btn1_text or "PROCESSAR" in btn1_text else
-                              "#5a7db8" if "RELATÓRIO" in btn1_text or "FILTRAR" in btn1_text else
-                              "#8b0000" if "EXPORTAR" in btn1_text else "#888888",
-                    text_color=self.cores['texto'], width=90, height=28,
-                    corner_radius=4, state="disabled", font=("Arial", 10, "bold")
-                )
-                btn1.pack(side='left', padx=2)
-                criar_tooltip(btn1, btn1_text)
-                setattr(self, btn1_attr, btn1)
-                
-                # Segundo botão da linha
-                btn2 = ctk.CTkButton(
-                    frame_botoes, text=btn2_text,
-                    command=lambda attr=btn2_attr: self._executar_comando(attr),
-                    fg_color=btn2_cor,
-                    hover_color="#a52a2a" if "CARREGAR" in btn2_text or "PROCESSAR" in btn2_text else
-                              "#5a7db8" if "RELATÓRIO" in btn2_text or "FILTRAR" in btn2_text else
-                              "#8b0000" if "EXPORTAR" in btn2_text else "#888888",
-                    text_color=self.cores['texto'], width=90, height=28,
-                    corner_radius=4, state="disabled", font=("Arial", 10, "bold")
-                )
-                btn2.pack(side='left', padx=2)
-                criar_tooltip(btn2, btn2_text)
-                setattr(self, btn2_attr, btn2)
+            # Distribuir os botões de controle nas linhas
+            if i == 0:  # Linha 1: CARREGAR e RELATÓRIO
+                self._criar_botao_controle(frame_botoes, botoes_controle[0])
+                self._criar_botao_controle(frame_botoes, botoes_controle[1])
+            
+            elif i == 1:  # Linha 2: PROCESSAR e FILTRAR
+                self._criar_botao_controle(frame_botoes, botoes_controle[2])
+                self._criar_botao_controle(frame_botoes, botoes_controle[3])
+            
+            elif i == 2:  # Linha 3: EXPORTAR e VARRER
+                self._criar_botao_controle(frame_botoes, botoes_controle[4])
+                self._criar_botao_controle(frame_botoes, botoes_controle[5])
+            
+            elif i == 3:  # Linha 4: LIMPAR
+                self._criar_botao_controle(frame_botoes, botoes_controle[6])
         
         # ===== STATUS =====
         self.status_label = ctk.CTkLabel(
@@ -262,6 +245,29 @@ class TelaCriarRelatorio:
         
         self.preview = BlocoPreview(self.content_frame, self.cores)
         self.preview.pack(fill='both', expand=True)
+    
+    def _criar_botao_controle(self, parent, botao_info):
+        """Cria um botão de controle na linha"""
+        texto, attr_name, cor = botao_info
+        
+        btn = ctk.CTkButton(
+            parent,
+            text=texto,
+            command=lambda attr=attr_name: self._executar_comando(attr),
+            fg_color=cor,
+            hover_color="#a52a2a" if "CARREGAR" in texto or "PROCESSAR" in texto else
+                      "#5a7db8" if "RELATÓRIO" in texto or "FILTRAR" in texto or "VARRER" in texto else
+                      "#8b0000" if "EXPORTAR" in texto else "#888888",
+            text_color="white",
+            width=90,
+            height=28,
+            corner_radius=4,
+            state="disabled",
+            font=("Arial", 10, "bold")
+        )
+        btn.pack(side='left', padx=2)
+        criar_tooltip(btn, texto)
+        setattr(self, attr_name, btn)
     
     def atualizar_fonte(self, tamanho):
         """Atualiza o tamanho da fonte em todos os elementos"""
@@ -297,6 +303,8 @@ class TelaCriarRelatorio:
             self._abrir_filtro()
         elif attr_name == "btn_exportar":
             self._exportar_excel()
+        elif attr_name == "btn_varrer":
+            self._varrer_dados()
         elif attr_name == "btn_limpar":
             self._limpar_tudo()
     
@@ -621,6 +629,11 @@ class TelaCriarRelatorio:
             
             progress.atualizar(90, "Atualizando interface...")
             
+            # HABILITAR BOTÕES
+            self.frame.after(0, lambda: self.btn_exportar.configure(state="normal"))
+            self.frame.after(0, lambda: self.btn_filtrar.configure(state="normal"))
+            self.frame.after(0, lambda: self.btn_varrer.configure(state="normal"))
+            
             # Atualizar interface na thread principal
             self.frame.after(0, lambda: self._atualizar_interface_apos_processar(preview))
             
@@ -635,8 +648,6 @@ class TelaCriarRelatorio:
     def _atualizar_interface_apos_processar(self, preview):
         """Atualiza a interface após o processamento"""
         self.preview.atualizar_conteudo(preview)
-        self.btn_exportar.configure(state="normal")
-        self.btn_filtrar.configure(state="normal")
         self.status_label.configure(
             text=f"✅ {self.relatorio_selecionado.nome} gerado! Use o filtro se desejar.",
             text_color="#00ff00"
@@ -657,6 +668,107 @@ class TelaCriarRelatorio:
         linhas.append(preview_df.to_string(index=False))
         
         return "\n".join(linhas)
+    
+    # ===== MÉTODO VARRER CORRIGIDO =====
+    def _varrer_dados(self):
+        """Remove dados indesejados do relatório de ruptura"""
+        if self.df_ruptura is None and self.df_combinado is None:
+            messagebox.showwarning("Aviso", "Processe um relatório primeiro!")
+            return
+        
+        # CORREÇÃO: Verificar cada DataFrame individualmente
+        if self.df_filtrado is not None:
+            df_atual = self.df_filtrado
+        elif self.df_ruptura is not None:
+            df_atual = self.df_ruptura
+        elif self.df_combinado is not None:
+            df_atual = self.df_combinado
+        else:
+            messagebox.showwarning("Aviso", "Nenhum dado para processar!")
+            return
+        
+        if df_atual is None or len(df_atual) == 0:
+            messagebox.showwarning("Aviso", "Nenhum dado para processar!")
+            return
+        
+        # Perguntar confirmação
+        resposta = messagebox.askyesno(
+            "Varrer Dados",
+            "Isso vai remover:\n"
+            "• Produtos que começam com 'NC'\n"
+            "• Linhas com Estoque=0, Venda=0 e Média=0\n"
+            "• Loja 'COMCARNE MATRIZ SAO LUIS'\n\n"
+            "Continuar?"
+        )
+        
+        if not resposta:
+            return
+        
+        try:
+            # Mostrar status
+            self.status_label.configure(text="⏳ Varrendo dados...", text_color="#ffff00")
+            self.parent.update()
+            
+            df_limpo = df_atual.copy()
+            linhas_antes = len(df_limpo)
+            
+            removidos_nc = 0
+            removidos_zeros = 0
+            removidos_matriz = 0
+            
+            # 1. Remover produtos que começam com "NC" na coluna PRODUTO
+            if 'PRODUTO' in df_limpo.columns:
+                mask_nc = df_limpo['PRODUTO'].astype(str).str.upper().str.startswith('NC')
+                df_limpo = df_limpo[~mask_nc]
+                removidos_nc = mask_nc.sum()
+            
+            # 2. Remover linhas com Estoque=0, Venda=0 e Média=0
+            colunas_necessarias = ['ESTQ LOJA', 'VENDAS MÊS ATUAL', 'MÉDIA VENDA MENSAL']
+            if all(col in df_limpo.columns for col in colunas_necessarias):
+                # Converter para numérico e tratar NaN
+                mask_zeros = (
+                    (pd.to_numeric(df_limpo['ESTQ LOJA'], errors='coerce').fillna(0) == 0) &
+                    (pd.to_numeric(df_limpo['VENDAS MÊS ATUAL'], errors='coerce').fillna(0) == 0) &
+                    (pd.to_numeric(df_limpo['MÉDIA VENDA MENSAL'], errors='coerce').fillna(0) == 0)
+                )
+                df_limpo = df_limpo[~mask_zeros]
+                removidos_zeros = mask_zeros.sum()
+            
+            # 3. Remover linha da matriz
+            if 'LOJA' in df_limpo.columns:
+                mask_matriz = df_limpo['LOJA'].astype(str).str.contains('COMCARNE MATRIZ SAO LUIS', na=False)
+                df_limpo = df_limpo[~mask_matriz]
+                removidos_matriz = mask_matriz.sum()
+            
+            linhas_depois = len(df_limpo)
+            
+            # Atualizar o DataFrame filtrado
+            self.df_filtrado = df_limpo.reset_index(drop=True)
+            
+            # Atualizar preview
+            preview_text = self._gerar_preview_filtrado(self.df_filtrado)
+            self.preview.atualizar_conteudo(preview_text)
+            
+            # Mostrar resultado
+            messagebox.showinfo(
+                "Varrimento Concluído",
+                f"✅ Linhas removidas:\n"
+                f"• Produtos 'NC': {removidos_nc}\n"
+                f"• Linhas zeradas: {removidos_zeros}\n"
+                f"• Loja matriz: {removidos_matriz}\n"
+                f"📊 Total: {linhas_antes} → {linhas_depois} linhas"
+            )
+            
+            self.status_label.configure(
+                text=f"✅ Dados varridos: {linhas_depois} linhas restantes",
+                text_color="#00ff00"
+            )
+            
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao varrer dados:\n{str(e)}")
+            self.status_label.configure(text="❌ Erro na varredura", text_color="#ff0000")
+            import traceback
+            traceback.print_exc()
     
     def _abrir_filtro(self):
         """Abre a janela de filtro para o relatório atual"""
@@ -832,6 +944,9 @@ class TelaCriarRelatorio:
         self.btn_processar.configure(state="disabled", fg_color=self.cores['botao_limpar'])
         self.btn_filtrar.configure(state="disabled")
         self.btn_carregar.configure(state="disabled")
+        self.btn_varrer.configure(state="disabled")
+        self.btn_limpar.configure(state="normal")  # LIMPAR sempre ativo
+        
         self.relatorio_label.configure(text="Nenhum relatório selecionado")
         self.status_label.configure(text="⏳ Aguardando arquivos...", text_color=self.cores['texto_secundario'])
         messagebox.showinfo("Limpo", "Todos os dados foram limpos!")
@@ -872,6 +987,9 @@ class TelaCriarRelatorio:
         
         if hasattr(self, 'btn_limpar'):
             self.btn_limpar.configure(fg_color=self.cores['botao_limpar'])
+        
+        if hasattr(self, 'btn_varrer'):
+            self.btn_varrer.configure(fg_color="#4a6da8")
         
         if hasattr(self, 'btn_relatorio'):
             self.btn_relatorio.configure(fg_color="#4a6da8")
